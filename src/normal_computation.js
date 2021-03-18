@@ -27,7 +27,7 @@ export function compute_triangle_normals_and_angle_weights(mesh) {
         const vert2 = get_vert(mesh, mesh.tris.indices[3*i_face + 1])
         const vert3 = get_vert(mesh, mesh.tris.indices[3*i_face + 2])
 
-        const normal = vec3.cross([0, 0, 0], vec3.sub([0, 0, 0], vert2, vert1), vec3.sub([0, 0, 0], vert3, vert1))
+        let normal = vec3.cross([0, 0, 0], vec3.sub([0, 0, 0], vert2, vert1), vec3.sub([0, 0, 0], vert3, vert1))
         normal = vec3.normalize([0, 0, 0], normal)
         
         const angle1 = Math.abs(vec3.angle(vec3.sub([0, 0, 0], vert3, vert1), vec3.sub([0, 0, 0], vert2, vert1)))
@@ -58,7 +58,7 @@ export function compute_vertex_normals(mesh, tri_normals, angle_weights) {
         const iv3 = mesh.tris.indices[3*i_face + 2]
 
         const scratch = [0, 0, 0];
-        const [w1, w2, w2] = angle_weights[i_face]
+        const [w1, w2, w3] = angle_weights[i_face]
         vec3.scale(scratch, tri_normals[i_face], w1)
         vec3.add(vertex_normals[iv1], scratch, vertex_normals[iv1])
         vec3.scale(scratch, tri_normals[i_face], w2)

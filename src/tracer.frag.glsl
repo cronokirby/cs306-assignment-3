@@ -291,6 +291,30 @@ Triangle get_triangle(int idx) {
 }
 #endif
 
+float det3(mat3 A) {
+	return dot(A[0], (cross(A[1], A[2])));
+}
+
+vec3 solve(mat3 A, vec3 b) {
+	float under = det3(A);
+
+	vec3 ret;
+
+	mat3 scratch = A;
+	scratch[0] = b;	
+	ret.x = det3(scratch) / under;
+
+	scratch = A;
+	scratch[1] = b;	
+	ret.y = det3(scratch) / under;
+
+	scratch = A;
+	scratch[2] = b;	
+	ret.z = det3(scratch) / under;
+
+	return ret;
+}
+
 bool ray_triangle_intersection(
 		vec3 ray_origin, vec3 ray_direction, 
 		Triangle tri,
@@ -311,15 +335,38 @@ bool ray_triangle_intersection(
 
 	Hint: vertex normals are stored in the same order as the vertex positions
 	*/
+	vec3 intersection_point;
+	t = MAX_RANGE + 10.;
 
 	vec3 p0 = tri.vertices[0];
 	vec3 p1 = tri.vertices[1];
 	vec3 p2 = tri.vertices[2];
+	mat3 A;
+	A[0] = -ray_direction;
+	A[1] = p0 - p2;
+	A[2] = p1 - p2;
+	vec3 solution = solve(A, ray_origin - p2);
+	float alpha = solution.y;
+	float beta = solution.z;
+	float gamma = 1.0 - alpha - beta;;
+	if (alpha < 0.0 || beta < 0.0 || gamma < 0.0 || alpha > 1.0 || beta > 1.0 || gamma > 1.0) {
+		return false;
+	}
+	if (solution.x < 0.0) {
+		return false;
+	}
+	t = solution.x;
 
-	vec3 intersection_point;
-	t = MAX_RANGE + 10.;
-
-	return false;
+	intersection_point = ray_origin + t * ray_direction;
+	#if defined PHONG_SHADING_STRATEGY
+		normal = alpha * tri.vertex_normals[0] + beta * tri.vertex_normals[1] + gamma * tri.vertex_normals[2];
+	#else
+		normal = normalize(cross(p1 - p0, p2 - p0));
+	#endif
+	if (dot(ray_direction, normal) >= 0.0) {
+		normal = -normal;
+	}
+	return true;
 }
 
 
