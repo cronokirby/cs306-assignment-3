@@ -184,21 +184,19 @@ bool ray_plane_intersection(
 		vec3 plane_normal, float plane_offset, 
 		out float t, out vec3 normal) 
 {
-	/** TODO 1.1:
-	The plane is described by its normal vec3(nx, ny, nz) and an offset d.
-	Point p belongs to the plane iff `dot(normal, p) = d`.
-
-	- compute the ray's ntersection of the plane
-	- if ray and plane are parallel there is no intersection
-	- otherwise compute intersection data and store it in `normal`, and `t` (distance along ray until intersection).
-	- return whether there is an intersection in front of the viewer (t > 0)
-	*/
-
-	// can use the plane center if you need it
+		// can use the plane center if you need it
 	vec3 plane_center = plane_normal * plane_offset;
-	t = MAX_RANGE + 10.;
-	//normal = ...;
-	return false;
+	// If direction is orthogonal to normal, we're parallel to plane
+	t = MAX_RANGE + 10.0;
+	if (abs(dot(ray_direction, plane_normal)) < 1e-12) {
+		return false;
+	}
+	t = dot(plane_normal, plane_center - ray_origin) / dot(plane_normal, ray_direction);
+	normal = plane_normal;
+	if (dot(ray_direction, normal) >= 0.0) {
+		normal = -normal;
+	}
+	return t > 0.0;
 }
 
 /*
@@ -209,19 +207,54 @@ bool ray_cylinder_intersection(
 		Cylinder cyl,
 		out float t, out vec3 normal) 
 {
-	/** TODO 1.2.2: 
-	- compute the ray's first valid intersection with the cylinder
-		(valid means in front of the viewer: t > 0)
-	- store intersection point in `intersection_point`
-	- store ray parameter in `t`
-	- store normal at intersection_point in `normal`.
-	- return whether there is an intersection with t > 0
-	*/
+	vec3 co = ray_origin - cyl.center;
+	vec3 a = cyl.axis / dot(cyl.axis, cyl.axis);
+	vec3 u = ray_direction - dot(a, ray_direction) * a;
+	vec3 v = co - dot(a, co) * a;
+	vec2 solutions;
+	int num_solutions = solve_quadratic(
+		dot(u, u),
+		2.0 * dot(u, v),
+		dot(v, v) - cyl.radius * cyl.radius,
+		solutions
+	);
 
-	vec3 intersection_point;
-	t = MAX_RANGE + 10.;
+	t = MAX_RANGE+10.;
 
-	return false;
+	if (num_solutions >= 1 && solutions[0] > 0.) {
+		t = solutions[0];
+	}
+	
+	if (num_solutions >= 2 && solutions[1] > 0. && solutions[1] < t) {
+		vec3 intersection_point = ray_origin + ray_direction * solutions[1];
+		vec3 cyl_point = intersection_point - cyl.center;
+		float z = dot(cyl_point, a);
+		if (abs(z) <= cyl.height / 2.0) {
+			t = solutions[1];
+			normal = (cyl_point - z * a) / cyl.radius;
+			if (dot(ray_direction, normal) >= 0.0) {
+				normal = -normal;
+			}
+			return true;
+		}
+	}
+
+	if (t < MAX_RANGE) {
+		vec3 intersection_point = ray_origin + ray_direction * t;
+		vec3 cyl_point = intersection_point - cyl.center;
+		float z = dot(cyl_point, a);
+		if (abs(z) > cyl.height / 2.0) {
+			t = MAX_RANGE + 10.0;
+			return false;
+		}
+		normal = (cyl_point - z * a) / cyl.radius;
+		if (dot(ray_direction, normal) >= 0.0) {
+			normal = -normal;
+		}
+		return true;
+	} else {
+		return false;
+	}
 }
 
 
@@ -401,6 +434,7 @@ bool ray_intersection(
 vec3 lighting(
 		vec3 object_point, vec3 object_normal, vec3 direction_to_camera, 
 		Light light, Material mat) {
+  vec3 contribution = vec3(0.0);
 
 	/** TODO 2.1: 
 	- compute the diffuse component
@@ -409,14 +443,34 @@ vec3 lighting(
 	- make sure that the reflected light shines towards the camera
 	- return the ouput color
 	*/
+	vec3 l = normalize(light.position - object_point);
+	float diffuse_amount = dot(object_normal, l);
+	vec3 r = reflect(-l, object_normal);
+	vec3 v = normalize(direction_to_camera);
+	if (diffuse_amount < 0.0) {
+		return vec3(0.0);
+	}
+	contribution += mat.color * mat.diffuse * diffuse_amount;
+	if (dot(r, v) >= 0.0) {
+		contribution += mat.color * mat.specular * pow(dot(r, v), mat.shininess);
+	}
+
 
 	/** TODO 2.2: 
 	- shoot a shadow ray from the intersection point to the light
 	- check whether it intersects an object from the scene
 	- update the lighting accordingly
 	*/
+	float col_distance;
+	vec3 col_normal = vec3(0.);
+	int mat_id      = 0;
+	ray_intersection(object_point + 1e-4 * object_normal, l, col_distance, col_normal, mat_id);
+	if (col_distance < length(light.position - object_point)) {
+		return vec3(0.0);
+	}
+	
 
-	return vec3(0.);
+	return contribution;
 }
 
 /*
@@ -436,59 +490,35 @@ void main() {
 	vec3 ray_origin = v2f_ray_origin;
 	vec3 ray_direction = normalize(v2f_ray_direction);
 
-
-	#if defined F_VISUALIZE_AABB && (NUM_TRIANGLES != 0)
-	bool ray_in_AABB = ray_AABB_filter(ray_origin, ray_direction, mesh_extent);
-	#endif
-
-
 	vec3 pix_color = vec3(0.);
+	float reflection_weight = 1.0;
 
-	/** TODO 2.1: 
-	- check whether the ray intersects an object in the scene
-	- if it does, compute the ambient contribution to the total intensity
-	- compute the intensity contribution from each light in the scene and store the sum in pix_color
-	*/
-
-	/** TODO 2.3.2: 
-	- create an outer loop on the number of reflections (see below for a suggested structure)
-	- compute lighting with the current ray (might be reflected)
-	- use the above formula for blending the current pixel color with the reflected one
-	- update ray origin and direction
-
-	We suggest you structure your code in the following way:
-
-	vec3 pix_color          = vec3(0.);
-	float reflection_weight = ...;
-
-	for(int i_reflection = 0; i_reflection < NUM_REFLECTIONS+1; i_reflection++) {
+	for (int i_reflection = 0; i_reflection < NUM_REFLECTIONS + 1; i_reflection++) {
 		float col_distance;
 		vec3 col_normal = vec3(0.);
 		int mat_id      = 0;
+		ray_intersection(ray_origin, ray_direction, col_distance, col_normal, mat_id);
+		if (col_distance >= MAX_RANGE) {
+			break;
+		}
 
-		...
+		Material mat = get_mat2(mat_id);
+		vec3 color = mat.color * mat.ambient * light_color_ambient;
 
-		Material m = get_mat2(mat_id); // get material of the intersected object
+		vec3 object_point = col_distance * ray_direction + ray_origin;
+		#if NUM_LIGHTS != 0
+		for (int i = 0; i < NUM_LIGHTS; ++i) {
+			color += lights[i].color * lighting(object_point, col_normal, ray_origin - object_point, lights[i], mat);
+		}
+		#endif
 
-		ray_origin        = ...;
-		ray_direction     = ...;
-		reflection_weight = ...;
+		pix_color += (1.0 - mat.mirror) * reflection_weight * color;
+		reflection_weight *= mat.mirror;
+		ray_direction = reflect(normalize(ray_direction), col_normal);
+		ray_origin = object_point + 1e-4 * col_normal;
 	}
-	*/
 
-	float col_distance;
-	vec3 col_normal = vec3(0.);
-	int mat_id      = 0;
-	ray_intersection(ray_origin, ray_direction, col_distance, col_normal, mat_id);
 
-	pix_color = 0.5+0.5*col_normal;
 
-	#if defined F_VISUALIZE_AABB && (NUM_TRIANGLES != 0)
-	if(ray_in_AABB) {
-		pix_color = 1. - pix_color;
-	}
-	#endif
-
-	gl_FragColor = vec4(pix_color, 1.);
-	//gl_FragColor *= sin(5.*col_distance);
+	gl_FragColor = vec4(pix_color, 1.0);
 }
