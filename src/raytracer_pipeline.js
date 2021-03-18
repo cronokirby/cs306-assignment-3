@@ -201,8 +201,6 @@ export class Raytracer {
 			code_injections['NUM_MESHES'] = 1
 			code_injections['NUM_TRIANGLES'] = num_faces
 
-			console.log('num_triangles', num_faces)
-
 			if (this.b_vis_aabb) {
 				code_injections['F_VISUALIZE_AABB'] = ''
 			}

@@ -1,4 +1,3 @@
-#version 300 es
 precision highp float;
 
 #define MAX_RANGE 1e6
@@ -249,9 +248,6 @@ Triangle get_triangle(int idx) {
 	tri.vertices[0] = texture2D(mesh_vert_pos_normals, vec2(0./5., idx_norm)).xyz;
 	tri.vertices[1] = texture2D(mesh_vert_pos_normals, vec2(1./5., idx_norm)).xyz;
 	tri.vertices[2] = texture2D(mesh_vert_pos_normals, vec2(2./5., idx_norm)).xyz;
-
-
-	float f = determinant(tri.vertices);
 
 	#ifdef PHONG_SHADING_STRATEGY
 	tri.vertex_normals[0] = texture2D(mesh_vert_pos_normals, vec2(3./5., idx_norm)).xyz;
