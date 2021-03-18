@@ -348,7 +348,7 @@ bool ray_triangle_intersection(
 	vec3 solution = solve(A, ray_origin - p2);
 	float alpha = solution.y;
 	float beta = solution.z;
-	float gamma = 1.0 - alpha - beta;;
+	float gamma = 1.0 - alpha - beta;
 	if (alpha < 0.0 || beta < 0.0 || gamma < 0.0 || alpha > 1.0 || beta > 1.0 || gamma > 1.0) {
 		return false;
 	}
@@ -361,8 +361,9 @@ bool ray_triangle_intersection(
 	#if defined PHONG_SHADING_STRATEGY
 		normal = alpha * tri.vertex_normals[0] + beta * tri.vertex_normals[1] + gamma * tri.vertex_normals[2];
 	#else
-		normal = normalize(cross(p1 - p0, p2 - p0));
+		normal = cross(p1 - p0, p2 - p0);
 	#endif
+	normal = normalize(normal);
 	if (dot(ray_direction, normal) >= 0.0) {
 		normal = -normal;
 	}
@@ -558,14 +559,11 @@ void main() {
 			color += lights[i].color * lighting(object_point, col_normal, ray_origin - object_point, lights[i], mat);
 		}
 		#endif
-
 		pix_color += (1.0 - mat.mirror) * reflection_weight * color;
 		reflection_weight *= mat.mirror;
 		ray_direction = reflect(normalize(ray_direction), col_normal);
 		ray_origin = object_point + 1e-4 * col_normal;
 	}
-
-
 
 	gl_FragColor = vec4(pix_color, 1.0);
 }
