@@ -266,8 +266,20 @@ bool ray_AABB_filter(
 	- check that this range is non-empty
 	- return whether the bounding box is intersected by the ray or not
 	*/
+	float lo = -1.0 / 0.0;
+	float hi = 1.0 / 0.0;
+	float tmp_lo, tmp_hi;
+	for (int i = 0; i < 3; i++) {
+		tmp_lo = (aabb.corner_min[i] - ray_origin[i]) / ray_direction[i];
+		tmp_hi = (aabb.corner_max[i] - ray_origin[i]) / ray_direction[i];
+		lo = max(lo, min(tmp_lo, tmp_hi));
+		hi = min(hi, max(tmp_lo, tmp_hi));
+	}
+	if (lo >= hi) {
+		return false;
+	}
 
-	return true;
+	return hi > 0.0;
 }
 
 
@@ -450,7 +462,6 @@ bool ray_intersection(
 	// Check for intersection with each triangle
 	#if NUM_TRIANGLES != 0 // only run if there are triangles in the scene
 	if( ray_AABB_filter(ray_origin, ray_direction, mesh_extent) ) {
-	// if (true){
 		for(int i = 0; i < NUM_TRIANGLES; i++) {
 			bool b_col = ray_triangle_intersection(
 				ray_origin, 
@@ -538,6 +549,10 @@ void main() {
 	vec3 ray_origin = v2f_ray_origin;
 	vec3 ray_direction = normalize(v2f_ray_direction);
 
+	#if defined F_VISUALIZE_AABB && (NUM_TRIANGLES != 0)
+	bool ray_in_AABB = ray_AABB_filter(ray_origin, ray_direction, mesh_extent);
+	#endif
+
 	vec3 pix_color = vec3(0.);
 	float reflection_weight = 1.0;
 
@@ -564,6 +579,12 @@ void main() {
 		ray_direction = reflect(normalize(ray_direction), col_normal);
 		ray_origin = object_point + 1e-4 * col_normal;
 	}
+
+	#if defined F_VISUALIZE_AABB && (NUM_TRIANGLES != 0)
+	if(ray_in_AABB) {
+		pix_color = 1. - pix_color;
+	}
+	#endif
 
 	gl_FragColor = vec4(pix_color, 1.0);
 }
